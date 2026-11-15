@@ -1,5 +1,11 @@
 import { MODULE_BY_KEY } from '@/data/modules'
 import { allRows, listRows, resetRows, saveRows } from '@/data/local-store'
+import {
+  assertBronzeStartable,
+  assertChannelStartable,
+  assertIngestWritable,
+  verifyChannel,
+} from '@/api/qualification'
 import type { ActionResult, EntryRow, ModuleMeta, OverviewResult, PageResult } from '@/data/types'
 
 // 会写进数据的「往回走」动作：命中就把这条记录标成异常态，看板上能一眼看出来。
@@ -33,6 +39,31 @@ export function runAction(key: string, id: number, action: string): ActionResult
   const target = meta.actionTargets[action]
   if (!target) {
     return { ok: false, message: `${meta.entity}没有登记「${action}」这个动作` }
+  }
+  // 接入通道受权限与归属约束：只有通道负责人能维护，跨部门共享内容只读。
+  if (key === 'ingest') {
+    const denied = assertIngestWritable(id)
+    if (denied) {
+      return denied
+    }
+    // 提交校验 = 接入资格核验：生成可复核结论，通过才允许进入运行中。
+    if (action === '提交校验') {
+      return verifyChannel(id)
+    }
+    // 启动接入门槛：必须持有有效的通过结论。
+    if (action === '启动接入') {
+      const gate = assertChannelStartable(id)
+      if (gate) {
+        return gate
+      }
+    }
+  }
+  // 原始表启用门槛：来源通道必须已通过核验并发准入证据。
+  if (key === 'bronze' && action === '启用同步') {
+    const gate = assertBronzeStartable(id)
+    if (gate) {
+      return gate
+    }
   }
   const rows = listRows(key)
   const index = rows.findIndex((row) => Number(row.id) === id)

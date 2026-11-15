@@ -1,6 +1,6 @@
-import { useState } from 'react'
 import { Link, Route, Routes } from 'react-router-dom'
 
+import { OPERATORS, setOperator, useOperator } from './stores/session'
 import Overview from './views/Overview'
 import CatalogView from './views/catalog'
 import IngestView from './views/ingest'
@@ -24,7 +24,7 @@ import AuditView from './views/audit'
 const navItems = [{ label: "运营概览", path: "/" }, { label: "数据编目", path: "/catalog" }, { label: "多源接入", path: "/ingest" }, { label: "原始层管理", path: "/bronze" }, { label: "清洗层管理", path: "/silver" }, { label: "聚合层管理", path: "/gold" }, { label: "湖区分区", path: "/lakezone" }, { label: "流式处理", path: "/stream" }, { label: "批量转换", path: "/batch" }, { label: "版本快照", path: "/snapshot" }, { label: "湖仓治理", path: "/govern" }, { label: "元数据中心", path: "/meta" }, { label: "血缘图谱", path: "/lineage" }, { label: "质量监控", path: "/quality" }, { label: "编排调度", path: "/schedule" }, { label: "历史回填", path: "/backfill" }, { label: "数据检索", path: "/search" }, { label: "资源计量", path: "/resource" }, { label: "操作审计", path: "/audit" }]
 
 export default function App() {
-  const [operator] = useState('值班管理员')
+  const operator = useOperator()
 
   return (
     <div className="app-shell">
@@ -41,7 +41,22 @@ export default function App() {
       <main className="app-main">
         <header className="app-head">
           <span className="head-desc">离线版数据湖治理配置工具，涵盖多源接入通道、分层表结构设计、湖区分区策略、流批转换编排、元数据编目检索与资源计量管理，所有配置持久化到浏览器本地存储。</span>
-          <span className="head-user">当前值班：{operator}</span>
+          <span className="head-user">
+            当前值班：
+            <select
+              value={`${operator.name}|${operator.department}`}
+              onChange={(event) => {
+                const [name, department] = event.target.value.split('|')
+                setOperator({ name, department })
+              }}
+            >
+              {OPERATORS.map((item) => (
+                <option key={item.name} value={`${item.name}|${item.department}`}>
+                  {item.name}（{item.department}）
+                </option>
+              ))}
+            </select>
+          </span>
         </header>
         <Routes>
           <Route path="/" element={<Overview />} />

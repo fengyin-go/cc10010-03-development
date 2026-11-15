@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { downloadEntries, listEntries, moduleMeta, runAction as applyAction } from '@/api/local-service'
+import { restrictedBronzeRows } from '@/api/qualification'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('bronze')
@@ -12,7 +13,8 @@ const columns = [
   "分区规则",
   "文件格式",
   "压缩类型",
-  "数据校验"
+  "数据校验",
+  "准入证据"
 ]
 const actions = [
   "提交校验",
@@ -25,25 +27,13 @@ const statuses = [
   "已启用",
   "已停用"
 ]
-const stats = [
-  {
-    "label": "原始表总数",
-    "value": 0
-  },
-  {
-    "label": "已启用表",
-    "value": 0
-  },
-  {
-    "label": "待校验表",
-    "value": 0
-  }
-]
 
 export default function BronzeView() {
   const [rows, setRows] = useState<EntryRow[]>([])
+  const [restricted, setRestricted] = useState<{ row: EntryRow; reason: string }[]>([])
   const [total, setTotal] = useState(0)
   const [errorMessage, setErrorMessage] = useState('')
+  const [noticeMessage, setNoticeMessage] = useState('')
   const [filters, setFilters] = useState<Record<string, string>>({})
   const filterFields = useMemo(() => columns.slice(0, 3), [])
 
@@ -53,6 +43,7 @@ export default function BronzeView() {
       const payload = listEntries(meta.key, filters)
       setRows(payload.items)
       setTotal(payload.total)
+      setRestricted(restrictedBronzeRows())
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : '原始层管理列表读取失败')
     }
@@ -64,13 +55,22 @@ export default function BronzeView() {
 
   function runAction(action: string, row: EntryRow) {
     setErrorMessage('')
+    setNoticeMessage('')
     const result = applyAction(meta.key, Number(row.id), action)
     if (!result.ok) {
       setErrorMessage(result.message)
       return
     }
+    setNoticeMessage(result.message)
     reload()
   }
+
+  const stats = [
+    { label: '原始表总数', value: rows.length },
+    { label: '已启用表', value: rows.filter((row) => String(row.status) === '已启用').length },
+    { label: '待校验表', value: rows.filter((row) => String(row.status) === '待校验').length },
+    { label: '来源通道受限表', value: restricted.length },
+  ]
 
   return (
     <section className="page" data-module="bronze">
@@ -132,7 +132,7 @@ export default function BronzeView() {
         <tbody>
           {rows.map((row) => (
             <tr key={String(row.id)}>
-              {columns.map((column) => <td key={column}>{row[column] ?? '—'}</td>)}
+              {columns.map((column) => <td key={column}>{row[column] || '—'}</td>)}
               <td>{row.status}</td>
               <td className="row-actions">
                 {actions.map((action) => (
@@ -151,8 +151,38 @@ export default function BronzeView() {
         </tbody>
       </table>
 
+      <h3 className="section-title">来源通道受限待校验清单</h3>
+      <table className="data-table">
+        <thead>
+          <tr>
+            <th>表编号</th>
+            <th>来源通道</th>
+            <th>当前状态</th>
+            <th>准入证据</th>
+            <th>受限原因</th>
+          </tr>
+        </thead>
+        <tbody>
+          {restricted.map((item) => (
+            <tr key={String(item.row.id)}>
+              <td>{item.row['表编号']}</td>
+              <td>{item.row['来源通道']}</td>
+              <td>{item.row.status}</td>
+              <td>{item.row['准入证据'] || '—'}</td>
+              <td>{item.reason}</td>
+            </tr>
+          ))}
+          {restricted.length === 0 && (
+            <tr>
+              <td className="empty-state" colSpan={5}>没有受来源通道限制的原始表，全部已取得有效准入证据</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
       <footer className="page-foot">
         <span>共 {total} 条原始层管理记录</span>
+        {noticeMessage && <span className="notice-text">{noticeMessage}</span>}
         {errorMessage && <span className="error-text">{errorMessage}</span>}
       </footer>
     </section>

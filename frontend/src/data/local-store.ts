@@ -48,6 +48,15 @@ export function saveRows(key: string, rows: EntryRow[]): void {
   }
 }
 
+// 多模块一次提交：核验结论、通道状态、原始层回写必须在同一次 setItem 里落盘，
+// 任何一步没算完就不写，通道保持待校验，原始表拿不到准入证据。
+export function saveAll(next: Record<string, EntryRow[]>): void {
+  cache = next
+  if (typeof window !== 'undefined' && window.localStorage) {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  }
+}
+
 export function resetRows(key: string): EntryRow[] {
   const rows = clone(SEED_ROWS[key] ?? [])
   saveRows(key, rows)
